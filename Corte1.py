@@ -32,14 +32,14 @@ def manual():
     input("\nPresiona ENTER para regresar al menú principal...")
 
 
-def pedir_funcion():
+def pedir_funcion(nombre="f(x)"):
     opc = input("¿Deseas ver el manual de sintaxis primero? (s/n): ")
     if opc.lower() == "s":
         manual()
 
     x = Symbol("x")
     while True:
-        fn_str = input("\nIngresa la función f(x): ").strip()
+        fn_str = input(f"\nIngresa la función {nombre}: ").strip()
         try:
             expr = sympify(fn_str)
             fn = lambdify(x, expr, modules=["numpy"])
@@ -58,6 +58,21 @@ def verificar_continuidad(expr, a, b):
     except Exception:
         # Si SymPy no puede determinar la continuidad analíticamente, permite continuar con advertencia
         return True
+
+
+def verificar_convergencia_punto_fijo(expr, x0):
+    """
+    Evalúa |g'(x0)| para advertir sobre la convergencia del método de punto fijo.
+    Retorna (valor_derivada, cumple_criterio). Si no puede evaluarse, asume que sí cumple.
+    """
+    x = Symbol("x")
+    try:
+        derivada = expr.diff(x)
+        deriv_fn = lambdify(x, derivada, modules=["numpy"])
+        valor = float(deriv_fn(x0))
+        return abs(valor), abs(valor) < 1
+    except Exception:
+        return None, True
 
 
 def calcular_iteraciones_teoricas(a, b, TOL):
@@ -86,7 +101,7 @@ def biseccion(fn, a, b, No, TOL):
             "a": a,
             "b": b,
             "c": P,
-            "f(c) o FP": FP,
+            "FP": FP,
             "Error": error,
         })
 
@@ -141,18 +156,82 @@ def ejecucion_biseccion():
         print("\n TABLA DE ITERACIONES:")
         print(df_resultado.to_string(index=False))
 
-    input("Presiona ENTER para volver al menú principal...")    
+    input("Presiona ENTER para volver al menú principal...")
 
 
-def punto_fijo():
-    datos = {
-            "Iteración": [1, 2],
-            "a": [0.0, 0.5],
-            "b": [1.0, 1.0],
-            "c": [0.5, 0.75],
-            "f(c)": [-0.5, 0.125],
-        }
-    return pd.DataFrame(datos)
+def punto_fijo(fn, x0, TOL, No):
+    """
+    Método de punto fijo para resolver x = g(x).
+
+    fn  -- función g(x) ya despejada
+    x0  -- valor inicial (semilla)
+    TOL -- tolerancia para el criterio de parada
+    No  -- número máximo de iteraciones
+    """
+    iteraciones = []
+    x_ant = x0
+    i = 1
+
+    while i <= No:
+        x_actual = fn(x_ant)
+        error = abs(x_actual - x_ant)
+
+        iteraciones.append({
+            "Iteracion": i,
+            "x_anterior": x_ant,
+            "x_actual": x_actual,
+            "Error": error,
+        })
+
+        if error < TOL:
+            break
+
+        x_ant = x_actual
+        i += 1
+
+    return pd.DataFrame(iteraciones)
+
+
+def ejecucion_punto_fijo():
+    limpiar_pantalla()
+    print("====--- MÉTODO DE PUNTO FIJO ---====")
+    print("Recuerda: la función debe estar despejada en la forma x = g(x)\n")
+
+    expr, fn = pedir_funcion("g(x)  (despejada de x = g(x))")
+
+    try:
+        x0 = float(input("\nIngresa el valor inicial (x0): "))
+        TOL = float(input("Tolerancia (TOL) [Presione ENTER para 0.001]") or 0.001)
+        No = int(input("Máximo de iteraciones (No) [Presione ENTER para 100]") or 100)
+    except ValueError:
+        print("Error: Ingresaste un parámetro inválido")
+        input("\nPresiona ENTER para regresar...")
+        return
+
+    print("\nVerificando el criterio de convergencia |g'(x0)| < 1...")
+    valor_derivada, converge = verificar_convergencia_punto_fijo(expr, x0)
+
+    if valor_derivada is not None:
+        print(f"|g'(x0)| = {valor_derivada:.6f}")
+
+    if not converge:
+        print("⚠️  Advertencia: no se cumple |g'(x0)| < 1. El método podría NO converger.")
+        seguir = input("¿Deseas continuar de todas formas? (s/n): ")
+        if seguir.lower() != "s":
+            input("\nPresiona ENTER para regresar al menú principal...")
+            return
+    else:
+        print("El criterio de convergencia se cumple.")
+
+    df_resultado = punto_fijo(fn, x0, TOL, No)
+
+    if df_resultado is not None and not df_resultado.empty:
+        print("\n TABLA DE ITERACIONES:")
+        print(df_resultado.to_string(index=False))
+        print(f"\nRaíz aproximada: {df_resultado.iloc[-1]['x_actual']:.6f}")
+
+    input("\nPresiona ENTER para volver al menú principal...")
+
 
 def newton():
     datos = {
@@ -178,7 +257,7 @@ def menu_inicio():
         if opc == "1":
             ejecucion_biseccion()
         elif opc == "2":
-            input("Pendiente [Presiona ENTER para volver al menú]")
+            ejecucion_punto_fijo()
         elif opc == "3":
             input("Pendiente [Presiona ENTER para volver al menú]")
         elif opc == "4":
