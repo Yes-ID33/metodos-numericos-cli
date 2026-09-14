@@ -59,25 +59,54 @@ def verificar_continuidad(expr, a, b):
         # Si SymPy no puede determinar la continuidad analíticamente, permite continuar con advertencia
         return True
 
+def verificar_teorema_punto_fijo(expr, fn, a, b):
+    """Verifica automapeo g([a,b]) actual en [a,b] y calcula K = max|g'(x)| < 1."""
+    x = Symbol("x")
+    puntos = np.linspace(a, b, 200)
 
-def verificar_convergencia_punto_fijo(expr, x0):
-    """
-    Evalúa |g'(x0)| para advertir sobre la convergencia del método de punto fijo.
-    Retorna (valor_derivada, cumple_criterio). Si no puede evaluarse, asume que sí cumple.
-    """
+    # 1. Automapeo: g(x) debe estar dentro de [a, b] para todo x en [a, b]
+    valores_g = fn(puntos)
+    min_g, max_g = np.min(valores_g), np.max(valores_g)
+    automapeo = (min_g >= a) and (max_g <= b)
+
+    # 2. Contracción: K = max |g'(x)| < 1
+    derivada = expr.diff(x)
+    deriv_fn = lambdify(x, derivada, modules=["numpy"])
+    valores_deriv = np.abs(deriv_fn(puntos))
+    K = np.max(valores_deriv)
+
+    return automapeo, K
+
+def n_biseccion(a, b, TOL):
+    """Calcula n >= log2((b - a) / TOL)."""
+    return int(np.ceil(np.log((b - a) / TOL) / np.log(2)))
+
+
+def n_punto_fijo(expr, fn, a, b, P0, TOL):
+    """Calcula n >= log( ((1 - K) * TOL) / |P0 - g(P0)| ) / log(K)."""
     x = Symbol("x")
     try:
         derivada = expr.diff(x)
         deriv_fn = lambdify(x, derivada, modules=["numpy"])
-        valor = float(deriv_fn(x0))
-        return abs(valor), abs(valor) < 1
+        puntos = np.linspace(a, b, 200)
+        K = float(np.max(np.abs(deriv_fn(puntos))))
+
+        if K >= 1:
+            return None, K  # No cumple la condición de contracción K < 1
+
+        g_P0 = float(fn(P0))
+        diferencia_inicial = abs(P0 - g_P0)
+
+        if diferencia_inicial == 0:
+            return 0, K  # P0 ya es el punto fijo exacto
+
+        numerador = np.log(((1.0 - K) * TOL) / diferencia_inicial)
+        denominador = np.log(K)
+
+        n_teorico = int(np.ceil(numerador / denominador))
+        return max(1, n_teorico), K
     except Exception:
-        return None, True
-
-
-def calcular_iteraciones_teoricas(a, b, TOL):
-    """Calcula n >= log2((b - a) / TOL) redondeado hacia arriba."""
-    return int(np.ceil(np.log((b - a) / TOL) / np.log(2)))
+        return None, None
 
 
 def biseccion(fn, a, b, No, TOL):
@@ -147,7 +176,7 @@ def ejecucion_biseccion():
         return
     print("La función es continua en el intervalo.")
 
-    n_teorico = calcular_iteraciones_teoricas(a, b, TOL)
+    n_teorico = n_biseccion(a, b, TOL)
     print(f"Iteraciones teóricas necesarias: {n_teorico}")
 
     df_resultado = biseccion(fn, a, b, No, TOL)
@@ -200,29 +229,62 @@ def ejecucion_punto_fijo():
     expr, fn = pedir_funcion("g(x)  (despejada de x = g(x))")
 
     try:
-        x0 = float(input("\nIngresa el valor inicial (x0): "))
-        TOL = float(input("Tolerancia (TOL) [Presione ENTER para 0.001]") or 0.001)
-        No = int(input("Máximo de iteraciones (No) [Presione ENTER para 100]") or 100)
+        a = float(input("\nIngresa el límite inferior del intervalo (a): "))
+        b = float(input("Ingresa el límite superior del intervalo (b): "))
+        if a >= b:
+            print("Error: 'a' debe ser estrictamente menor que 'b'.")
+            input("\nPresiona ENTER para regresar...")
+            return
+
+        x0 = float(input(f"Ingresa el valor inicial (x0) dentro de [{a}, {b}]: "))
+        if not (a <= x0 <= b):
+            print(f"Advertencia: x0 ({x0}) está fuera del intervalo [{a}, {b}].")
+
+        TOL = float(input("Tolerancia (TOL) [Presione ENTER para 0.001]: ") or 0.001)
+        No = int(input("Máximo de iteraciones (No) [Presione ENTER para 100]: ") or 100)
     except ValueError:
-        print("Error: Ingresaste un parámetro inválido")
+        print("Error: Ingresaste un parámetro numérico inválido.")
         input("\nPresiona ENTER para regresar...")
         return
 
-    print("\nVerificando el criterio de convergencia |g'(x0)| < 1...")
-    valor_derivada, converge = verificar_convergencia_punto_fijo(expr, x0)
+    # 1. Verificación de Continuidad en [a, b]
+    print("\n1. Verificando la continuidad de g(x) en el intervalo...")
+    if not verificar_continuidad(expr, a, b):
+        print(f"Error: La función NO es continua en [{a}, {b}].")
+        input("\nPresiona ENTER para regresar...")
+        return
+    print("  - g(x) es continua en el intervalo.")
 
-    if valor_derivada is not None:
-        print(f"|g'(x0)| = {valor_derivada:.6f}")
+    # 2. Verificación del Teorema de Banach (Automapeo y Contracción K)
+    print("\n2. Verificando el Teorema del Punto Fijo (Automapeo y K < 1)...")
+    automapeo, K = verificar_teorema_punto_fijo(expr, fn, a, b)
 
-    if not converge:
-        print("⚠️  Advertencia: no se cumple |g'(x0)| < 1. El método podría NO converger.")
-        seguir = input("¿Deseas continuar de todas formas? (s/n): ")
+    if automapeo:
+        print("  - Automapeo confirmado: g([a, b]) es subconjunto de [a, b]")
+    else:
+        print("  - Advertencia: g(x) se sale del intervalo [a, b] en algunos puntos.")
+
+    if K is not None:
+        print(f"  - Constante de contracción K = max|g'(x)| en [{a}, {b}]: {K:.6f}")
+        if K < 1:
+            print("  - Se cumple K < 1 (Garantiza unicidad de la raíz).")
+        else:
+            print("  - Advertencia: K >= 1. El método podría divergir u oscilar.")
+
+    if not automapeo or (K is not None and K >= 1):
+        seguir = input("\n¿Deseas continuar con las iteraciones de todas formas? (s/n): ")
         if seguir.lower() != "s":
             input("\nPresiona ENTER para regresar al menú principal...")
             return
-    else:
-        print("El criterio de convergencia se cumple.")
 
+    # 3. Cálculo Teórico de Iteraciones
+    n_teorico, _ = n_punto_fijo(expr, fn, a, b, x0, TOL)
+    if n_teorico is not None:
+        print(f"\nIteraciones teóricas estimadas (n): {n_teorico}")
+    else:
+        print("\nNo se pudo determinar n teórico (K >= 1).")
+
+    # 4. Ejecución del algoritmo
     df_resultado = punto_fijo(fn, x0, TOL, No)
 
     if df_resultado is not None and not df_resultado.empty:
@@ -231,7 +293,6 @@ def ejecucion_punto_fijo():
         print(f"\nRaíz aproximada: {df_resultado.iloc[-1]['x_actual']:.6f}")
 
     input("\nPresiona ENTER para volver al menú principal...")
-
 
 def newton():
     datos = {
