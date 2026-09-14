@@ -33,16 +33,27 @@ def manual():
 
 
 def pedir_funcion(nombre="f(x)"):
+    from sympy import pi, E
     opc = input("¿Deseas ver el manual de sintaxis primero? (s/n): ")
     if opc.lower() == "s":
         manual()
 
     x = Symbol("x")
+    local_dict = {"PI": pi, "pi": pi, "Pi": pi, "E": E, "e": E}
+    
     while True:
         fn_str = input(f"\nIngresa la función {nombre}: ").strip()
         try:
-            expr = sympify(fn_str)
+            expr = sympify(fn_str, locals=local_dict)
             fn = lambdify(x, expr, modules=["numpy"])
+            
+            # Prueba rápida para detectar variables no definidas u otros símbolos
+            try:
+                fn(1.0)
+            except Exception as e_test:
+                print(f"❌ Error al evaluar la función numéricamente. ¿Usaste otra variable además de 'x' o escribiste mal una constante? (Detalle: {e_test})")
+                continue
+                
             return expr, fn
         except Exception as e:
             print(f"❌ Error al interpretar la función: {e}. Intenta de nuevo.")
@@ -294,15 +305,67 @@ def ejecucion_punto_fijo():
 
     input("\nPresiona ENTER para volver al menú principal...")
 
-def newton():
-    datos = {
-            "Iteración": [1, 2],
-            "a": [0.0, 0.5],
-            "b": [1.0, 1.0],
-            "c": [0.5, 0.75],
-            "f(c)": [-0.5, 0.125],
-        }
-    return pd.DataFrame(datos)
+def newton(expr, fn, x0, TOL, No):
+    """
+    Método de Newton-Raphson para encontrar la raíz de f(x) = 0.
+    """
+    x = Symbol("x")
+    derivada = expr.diff(x)
+    deriv_fn = lambdify(x, derivada, modules=["numpy"])
+    
+    iteraciones = []
+    i = 1
+    
+    while i <= No:
+        f_x0 = fn(x0)
+        df_x0 = deriv_fn(x0)
+        
+        if df_x0 == 0:
+            print(f"Error: La derivada se hizo cero en la iteración {i} (x = {x0}).")
+            break
+            
+        x_actual = x0 - (f_x0 / df_x0)
+        error = abs(x_actual - x0)
+        
+        iteraciones.append({
+            "Iteracion": i,
+            "x0": x0,
+            "x_actual": x_actual,
+            "f(x_actual)": fn(x_actual),
+            "Error": error
+        })
+        
+        if error < TOL:
+            break
+            
+        i += 1
+        x0 = x_actual
+        
+    return pd.DataFrame(iteraciones)
+
+def ejecucion_newton():
+    limpiar_pantalla()
+    print("====--- MÉTODO DE NEWTON-RAPHSON ---====")
+    
+    expr, fn = pedir_funcion()
+    
+    try:
+        x0 = float(input("\nIngresa el valor inicial (X0): "))
+        TOL = float(input("Tolerancia (tol) [Presione ENTER para 0.001]: ") or 0.001)
+        No = int(input("Máximo de iteraciones (No) [Presione ENTER para 100]: ") or 100)
+    except ValueError:
+        print("Error: Ingresaste un parámetro numérico inválido.")
+        input("\nPresiona ENTER para regresar...")
+        return
+        
+    df_resultado = newton(expr, fn, x0, TOL, No)
+    
+    if df_resultado is not None and not df_resultado.empty:
+        print("\n TABLA DE ITERACIONES:")
+        print(df_resultado.to_string(index=False))
+        print(f"\nRaíz aproximada: {df_resultado.iloc[-1]['x_actual']:.6f}")
+        
+    input("\nPresiona ENTER para volver al menú principal...")
 
 def menu_inicio():
     while True:
@@ -320,7 +383,7 @@ def menu_inicio():
         elif opc == "2":
             ejecucion_punto_fijo()
         elif opc == "3":
-            input("Pendiente [Presiona ENTER para volver al menú]")
+            ejecucion_newton()
         elif opc == "4":
             print("¡Hasta luego!")
             break
