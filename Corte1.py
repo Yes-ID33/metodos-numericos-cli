@@ -46,6 +46,22 @@ def manual():
     print("=" * 60)
     input("\nPresiona ENTER para regresar al menú principal...")
 
+def pedir_float(mensaje):
+    """Solicita un número o expresión matemática al usuario (ej. pi/2, sqrt(2), 3/4)
+
+    y la convierte a float usando SymPy.
+    """
+    local_dict = {"pi": pi, "e": E}
+    while True:
+        txt = input(mensaje).strip()
+        try:
+            # sympify evalúa la expresión matemática (ej. 'pi/2') a su valor numérico
+            val = float(sympify(txt, locals=local_dict))
+            return val
+        except Exception:
+            print(
+                "❌ Error: Ingresaste una expresión o valor numérico inválido. Intenta de nuevo."
+            )
 
 def pedir_parametros(expr):
     """Detecta símbolos libres distintos de 'x' dentro de la expresión (p. ej. A, B, C, r, L)
@@ -59,7 +75,7 @@ def pedir_parametros(expr):
     for s in libres:
         while True:
             try:
-                valores[s] = float(input(f"  Valor de {s}: "))
+                valores[s] = pedir_float(f"  Valor de {s}: ")
                 break
             except ValueError:
                 print("  ❌ Valor inválido, ingresa un número.")
@@ -273,14 +289,14 @@ def ejecucion_biseccion():
     expr, fn = pedir_funcion()
 
     try:
-        a = float(input("\nIngresa el límite inferior (a): "))
-        b = float(input("Ingresa el límite superior (b): "))
+        a = pedir_float("\nIngresa el límite inferior (a): ")
+        b = pedir_float("Ingresa el límite superior (b): ")
         if a >= b:
             print("'a' debe ser estrictamente menor que 'b'.")
             input("\nPresiona ENTER para regresar...")
             return
 
-        TOL = float(input("Tolerancia (TOL) [Presione ENTER para 0.001]: ") or 0.001)
+        TOL = pedir_float("Tolerancia (TOL) [Presione ENTER para 0.001]: ") or 0.001
         No = int(input("Máximo de iteraciones (No) [Presione ENTER para 100]: ") or 100)
     except ValueError:
         print("Error: Ingresaste un parámetro inválido")
@@ -396,18 +412,18 @@ def ejecucion_punto_fijo():
     expr, fn = pedir_funcion("g(x)  (despejada de x = g(x))")
 
     try:
-        a = float(input("\nIngresa el límite inferior del intervalo (a): "))
-        b = float(input("Ingresa el límite superior del intervalo (b): "))
+        a = pedir_float("\nIngresa el límite inferior del intervalo (a): ")
+        b = pedir_float("Ingresa el límite superior del intervalo (b): ")
         if a >= b:
             print("Error: 'a' debe ser estrictamente menor que 'b'.")
             input("\nPresiona ENTER para regresar...")
             return
 
-        x0 = float(input(f"Ingresa el valor inicial (x0) dentro de [{a}, {b}]: "))
+        x0 = pedir_float(f"Ingresa el valor inicial (x0) dentro de [{a}, {b}]: ")
         if not (a <= x0 <= b):
             print(f"Advertencia: x0 ({x0}) está fuera del intervalo [{a}, {b}].")
 
-        TOL = float(input("Tolerancia (TOL) [Presione ENTER para 0.001]: ") or 0.001)
+        TOL = pedir_float("Tolerancia (TOL) [Presione ENTER para 0.001]: ") or 0.001
         No = int(input("Máximo de iteraciones (No) [Presione ENTER para 100]: ") or 100)
     except ValueError:
         print("Error: Ingresaste un parámetro numérico inválido.")
@@ -536,8 +552,8 @@ def ejecucion_newton():
     expr, fn = pedir_funcion()
 
     try:
-        x0 = float(input("\nIngresa el valor inicial (X0): "))
-        TOL = float(input("Tolerancia (TOL) [Presione ENTER para 0.001]: ") or 0.001)
+        x0 = pedir_float("\nIngresa el valor inicial (X0): ")
+        TOL = pedir_float("Tolerancia (TOL) [Presione ENTER para 0.001]: ") or 0.001
         No = int(input("Máximo de iteraciones (No) [Presione ENTER para 100]: ") or 100)
     except ValueError:
         print("Error: Ingresaste un parámetro numérico inválido.")
@@ -585,7 +601,7 @@ def clasificar_punto_critico():
     expr, fn = pedir_funcion("F(x)")
 
     try:
-        x0 = float(input("\nIngresa el valor del punto crítico x0 (donde F'(x0) ≈ 0): "))
+        x0 = pedir_float("\nIngresa el valor del punto crítico x0 (donde F'(x0) ≈ 0): ")
     except ValueError:
         print("Valor inválido.")
         input("\nPresiona ENTER para regresar...")
